@@ -1,4 +1,4 @@
-use crate::{key::Key, service::SignatureValidator};
+use crate::{key::Key, service::SignatureValidation};
 use axum::response::IntoResponse;
 use hyper::{
     body::{Body, Bytes, HttpBody},
@@ -6,27 +6,27 @@ use hyper::{
 };
 use tower::{Layer, Service};
 
-pub struct SignatureValidatorLayer {
+pub struct SignatureValidationLayer {
     key: Key,
 }
 
-impl SignatureValidatorLayer {
-    pub fn new(data: &[u8]) -> Result<SignatureValidatorLayer, hex::FromHexError> {
-        Key::from(data).map(|key| SignatureValidatorLayer { key })
+impl SignatureValidationLayer {
+    pub fn new(data: &[u8]) -> Result<SignatureValidationLayer, hex::FromHexError> {
+        Key::from(data).map(|key| SignatureValidationLayer { key })
     }
 }
 
-impl<Inner, ResBody> Layer<Inner> for SignatureValidatorLayer
+impl<Inner, ResBody> Layer<Inner> for SignatureValidationLayer
 where
     Inner: Service<Request<Body>, Response = ResBody> + Send + Sync + Clone + 'static,
     Inner::Error: IntoResponse + Send,
     Inner::Future: Send,
     ResBody: HttpBody<Data = Bytes> + Send + 'static,
 {
-    type Service = SignatureValidator<Inner, ResBody>;
+    type Service = SignatureValidation<Inner, ResBody>;
 
     fn layer(&self, inner: Inner) -> Self::Service {
-        SignatureValidator {
+        SignatureValidation {
             key: self.key.clone(),
             inner,
         }

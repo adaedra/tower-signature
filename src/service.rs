@@ -12,7 +12,7 @@ use ring::signature::{VerificationAlgorithm, ED25519};
 use std::{future::Future, io::Write};
 use tower::Service;
 
-pub struct SignatureValidator<Inner, ResBody>
+pub struct SignatureValidation<Inner, ResBody>
 where
     Inner: Service<Request<Body>, Response = ResBody> + Send + Sync + Clone + 'static,
     Inner::Error: IntoResponse + Send,
@@ -23,7 +23,7 @@ where
     pub inner: Inner,
 }
 
-impl<Inner, ResBody> Clone for SignatureValidator<Inner, ResBody>
+impl<Inner, ResBody> Clone for SignatureValidation<Inner, ResBody>
 where
     Inner: Service<Request<Body>, Response = ResBody> + Send + Sync + Clone + 'static,
     Inner::Error: IntoResponse + Send,
@@ -31,7 +31,7 @@ where
     ResBody: HttpBody<Data = Bytes> + Send + 'static,
 {
     fn clone(&self) -> Self {
-        SignatureValidator {
+        SignatureValidation {
             key: self.key.clone(),
             inner: self.inner.clone(),
         }
@@ -73,7 +73,7 @@ async fn checked(key: Key, req: Request<Body>) -> Result<Request<Body>, Error> {
     ))
 }
 
-impl<Inner, ResBody> Service<Request<Body>> for SignatureValidator<Inner, ResBody>
+impl<Inner, ResBody> Service<Request<Body>> for SignatureValidation<Inner, ResBody>
 where
     Inner: Service<Request<Body>, Response = ResBody> + Send + Sync + Clone + 'static,
     Inner::Error: IntoResponse + Send,

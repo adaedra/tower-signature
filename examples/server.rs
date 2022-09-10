@@ -1,5 +1,5 @@
 use axum::{handler::Handler, http::StatusCode, routing::post, Router, Server};
-use tower_signature::SignatureValidatorLayer;
+use tower_signature::SignatureValidationLayer;
 use tracing::Level;
 
 async fn webhook() -> (StatusCode, &'static str) {
@@ -16,7 +16,7 @@ async fn main() {
     let app = Router::new()
         .route(
             "/webhook",
-            post(webhook.layer(SignatureValidatorLayer::new(key.as_bytes()).unwrap())),
+            post(webhook.layer(SignatureValidationLayer::new(key.as_bytes()).unwrap())),
         )
         .layer(tower_http::trace::TraceLayer::new_for_http());
 

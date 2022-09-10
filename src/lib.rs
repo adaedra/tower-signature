@@ -4,4 +4,4 @@ mod layer;
 mod service;
 
 pub use error::Error;
-pub use layer::SignatureValidatorLayer;
+pub use layer::SignatureValidationLayer;
