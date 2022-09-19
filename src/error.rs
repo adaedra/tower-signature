@@ -13,6 +13,7 @@ pub enum Error {
     InvalidSignature,
 }
 
+#[derive(Debug)]
 pub enum Wrapper<E>
 where
     E: IntoResponse + Send + 'static,

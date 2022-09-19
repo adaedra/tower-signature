@@ -9,7 +9,7 @@ axum = "0.5"
 futures = "0.3"
 hex = "0.4"
 hyper = "0.14"
-ring = "0.16"
+ring = { version = "0.16", features = ["std"] }
 tokio = { version = "1.20", features = ["full"] }
 thiserror = "1.0"
 tower = "0.4"
@@ -17,4 +17,5 @@ tower-http = { version = "0.3", features = ["trace"] }
 tracing = "0.1"
 
 [dev-dependencies]
+anyhow = "1.0"
 tracing-subscriber = "0.3"
