@@ -1,21 +1,17 @@
-use crate::{
-    error::{Error, Wrapper},
-    key::Key,
-};
-use axum::response::IntoResponse;
+use crate::{error::Error, key::Key};
 use futures::{future::ready, TryFutureExt, TryStreamExt};
 use hyper::{
     body::{Body, Bytes, HttpBody},
     Request,
 };
 use ring::signature::{VerificationAlgorithm, ED25519};
-use std::{future::Future, io::Write};
+use std::{error::Error as StdError, future::Future, io::Write};
 use tower::Service;
 
 pub struct SignatureValidation<Inner, ResBody>
 where
     Inner: Service<Request<Body>, Response = ResBody> + Send + Sync + Clone + 'static,
-    Inner::Error: IntoResponse + Send,
+    Inner::Error: Into<Box<dyn StdError + Sync + Send + 'static>>,
     Inner::Future: Send,
     ResBody: HttpBody<Data = Bytes> + Send + 'static,
 {
@@ -26,7 +22,7 @@ where
 impl<Inner, ResBody> Clone for SignatureValidation<Inner, ResBody>
 where
     Inner: Service<Request<Body>, Response = ResBody> + Send + Sync + Clone + 'static,
-    Inner::Error: IntoResponse + Send,
+    Inner::Error: Into<Box<dyn StdError + Sync + Send + 'static>>,
     Inner::Future: Send,
     ResBody: HttpBody<Data = Bytes> + Send + 'static,
 {
@@ -76,12 +72,12 @@ async fn checked(key: Key, req: Request<Body>) -> Result<Request<Body>, Error> {
 impl<Inner, ResBody> Service<Request<Body>> for SignatureValidation<Inner, ResBody>
 where
     Inner: Service<Request<Body>, Response = ResBody> + Send + Sync + Clone + 'static,
-    Inner::Error: IntoResponse + Send,
+    Inner::Error: Into<Box<dyn StdError + Sync + Send + 'static>>,
     Inner::Future: Send,
     ResBody: HttpBody<Data = Bytes> + Send + 'static,
 {
     type Response = ResBody;
-    type Error = Wrapper<Inner::Error>;
+    type Error = Box<dyn StdError + Sync + Send + 'static>;
     type Future =
         std::pin::Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>>;
 
@@ -105,12 +101,11 @@ where
 
 #[cfg(test)]
 mod tests {
-    use axum::response::IntoResponse;
-    use crate::error;
+    use super::StdError;
+    use crate::{error, key::Key, service::SignatureValidation};
     use hyper::{Body, Request, Response};
     use std::convert::Infallible;
-    use super::{SignatureValidation, Key};
-    use tower::{Service, service_fn};
+    use tower::{service_fn, Service};
 
     #[allow(dead_code)]
     const PRIVATE_KEY: &[u8] = b"3053020101300506032b657004220420479fb153f22a36dc0764ca66b1d46e7c47219a0f1ce14084c3bae771340bf3d3a1230321004cd5fbef483a6c819d93635f5f0d1c57e48fb66a935d8ae5f2e2f0041dab2035";
@@ -120,13 +115,16 @@ mod tests {
     const SIGNATURE: &[u8] = b"90aaa91f005715c8e82d7ca54b34933cf60c5e9cdbd2880a42e2e41441c32651a7e75aef133192a01141c317161cb060c338748672cb07da45c3aa5a31344601";
 
     async fn dummy(_: Request<Body>) -> Result<Response<Body>, Infallible> {
-        Ok(Response::builder().status(501).body("Not implemented".into()).unwrap())
+        Ok(Response::builder()
+            .status(501)
+            .body("Not implemented".into())
+            .unwrap())
     }
 
     fn wrap<S>(inner: S) -> SignatureValidation<S, Response<Body>>
     where
         S: Service<Request<Body>, Response = Response<Body>> + Send + Sync + Clone + 'static,
-        S::Error: IntoResponse + Send,
+        S::Error: Into<Box<dyn StdError + Sync + Send + 'static>>,
         S::Future: Send,
     {
         SignatureValidation {
@@ -163,9 +161,12 @@ mod tests {
         let mut stack = wrap(service_fn(dummy));
 
         let res = stack.call(req).await;
-        assert!(
-            matches!(res, Err(error::Wrapper::Own(error::Error::InvalidSignature)))
-        );
+        let err = res.unwrap_err();
+
+        assert!(matches!(
+            err.downcast_ref::<error::Error>(),
+            Some(&error::Error::InvalidSignature),
+        ));
     }
 
     #[tokio::test]
@@ -178,9 +179,12 @@ mod tests {
         let mut stack = wrap(service_fn(dummy));
 
         let res = stack.call(req).await;
-        assert!(
-            matches!(res, Err(error::Wrapper::Own(error::Error::MissingSignature)))
-        );
+        let err = res.unwrap_err();
+
+        assert!(matches!(
+            err.downcast_ref::<error::Error>(),
+            Some(&error::Error::MissingSignature),
+        ));
     }
 
     #[tokio::test]
@@ -193,8 +197,10 @@ mod tests {
         let mut stack = wrap(service_fn(dummy));
 
         let res = stack.call(req).await;
-        assert!(
-            matches!(res, Err(error::Wrapper::Own(error::Error::MissingSignature)))
-        );
+        let err = res.unwrap_err();
+        assert!(matches!(
+            err.downcast_ref::<error::Error>(),
+            Some(&error::Error::MissingSignature),
+        ));
     }
 }

@@ -1,9 +1,9 @@
 use crate::{key::Key, service::SignatureValidation};
-use axum::response::IntoResponse;
 use hyper::{
     body::{Body, Bytes, HttpBody},
     Request,
 };
+use std::error::Error as StdError;
 use tower::{Layer, Service};
 
 pub struct SignatureValidationLayer {
@@ -19,7 +19,7 @@ impl SignatureValidationLayer {
 impl<Inner, ResBody> Layer<Inner> for SignatureValidationLayer
 where
     Inner: Service<Request<Body>, Response = ResBody> + Send + Sync + Clone + 'static,
-    Inner::Error: IntoResponse + Send,
+    Inner::Error: Into<Box<dyn StdError + Sync + Send + 'static>>,
     Inner::Future: Send,
     ResBody: HttpBody<Data = Bytes> + Send + 'static,
 {
